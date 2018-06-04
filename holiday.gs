@@ -25,7 +25,7 @@ var Settings = {
 
     // The id of the Calendar where we are going to create the events
     // if you do not know how to get the Calendar id *
-    // READ MORE: #LINK DO BLOGPOST#
+    // READ MORE: https://blog.sheetgo.com/google-cloud-solutions/holiday-tracking/
     calendarId: "<your_calendar_id>",
 
     // The suffix of the Calendar event. For example: "John Doe OFF"
@@ -36,13 +36,9 @@ var Settings = {
 
 /**
  * Access data from a worksheet to create events in Calendar-related dates
- * Trigger:
- *
  */
 function setHolidayCalendar() {
-
- 
-    
+  
     // Access Calendar's Spreadsheet
     var spreadsheet = SpreadsheetApp.openById(Settings.spreadsheetId).getSheetByName(Settings.sheetName);
     var calendar = CalendarApp.getCalendarById(Settings.calendarId);
