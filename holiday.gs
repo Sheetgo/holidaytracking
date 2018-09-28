@@ -14,34 +14,33 @@
  *================================================================================================================*/
 
 // Project Settings
-var Settings = {
+Settings = {
 
     // The id is a unique set of characters that can be found in the spreadsheet url
     // The spreadsheet id that has the template with your data
-    spreadsheetId: "<your_spreadsheet_id>",
+    spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
    
     // The sheet name
-    sheetName: '<your_sheet_name>',
-
-    // The id of the Calendar where we are going to create the events
-    // if you do not know how to get the Calendar id *
-    // READ MORE: https://blog.sheetgo.com/google-cloud-solutions/holiday-tracking/
-    calendarId: "<your_calendar_id>",
-
-    // The suffix of the Calendar event. For example: "John Doe OFF"
-    eventSuffix: "<your_event_suffix>"
-
+    sheetName: "Holiday Tracking", // Ex.: Holiday Tracking
+    requestSheetName: "Time off request form", // Ex.: Time off request form
 };
 
 
 /**
  * Access data from a worksheet to create events in Calendar-related dates
+ * Trigger:
+ *
  */
 function setHolidayCalendar() {
+    
+    // Access to parameters sheet to calendar_id and event_suffix
+    var parameter_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Parameters');
+    var calendar_id = parameter_sheet.getRange('A2').getValue();
+    var event_suffix = parameter_sheet.getRange('B2').getValue();
   
     // Access Calendar's Spreadsheet
     var spreadsheet = SpreadsheetApp.openById(Settings.spreadsheetId).getSheetByName(Settings.sheetName);
-    var calendar = CalendarApp.getCalendarById(Settings.calendarId);
+    var calendar = CalendarApp.getCalendarById(calendar_id);
 
     // The last row and column with data
     var lastRow = spreadsheet.getLastRow();
@@ -51,7 +50,7 @@ function setHolidayCalendar() {
     var eventStart, eventEnds, user, day, nextDay, userDays;
 
     // Get all days
-    var dates = spreadsheet.getRange(5, 2, lastRow - 4, 1).getValues();
+    var dates = spreadsheet.getRange(5, 1, lastRow - 4, 1).getValues();
 
     // All employees name
     var users = spreadsheet.getRange(1, 4, 1, lastColumn - 3).getValues();
@@ -59,8 +58,9 @@ function setHolidayCalendar() {
     // Events Range
     var initialDate = dates[0][0];
     var finalDate = dates[dates.length - 1][0];
+    initialDate.setDate(initialDate.getDate() + 1)
     finalDate.setDate(finalDate.getDate() + 1)
-     
+
     // Array to store the days of all users
     var allUsersDays = [];
 
@@ -71,7 +71,8 @@ function setHolidayCalendar() {
 
     // Calls the function deleteEvents to delete all events in calendar between the
     // dates with eventSuffix in the title
-    deleteEvents(calendar, initialDate, finalDate, Settings.eventSuffix);
+  
+    deleteEvents(calendar, initialDate, finalDate, event_suffix);
 
     // Initialize consecutive days counter
     var counter = 0;
@@ -103,7 +104,7 @@ function setHolidayCalendar() {
 
                 // Creates a single event without an end date
                 // In this case, Calendar will create a single day event
-                calendar.createAllDayEvent(user + " " + Settings.eventSuffix, eventStart);
+                calendar.createAllDayEvent(user + " " + event_suffix, eventStart);
 
             } else if (day && nextDay) {
 
@@ -115,13 +116,15 @@ function setHolidayCalendar() {
 
                 // If the counter is greater than zero
                 // Event start date
-                eventStart = dates[k - counter][0];
 
                 // Event end time
                 eventEnds = dates[k + 1][0];
+              
+                eventStart.setDate(eventStart.getDate() + 1)
+                eventEnds.setDate(eventEnds.getDate() + 1)
 
                 // Create an event with a start and end date, according to the counter
-                calendar.createAllDayEvent(user + " " + Settings.eventSuffix, eventStart, eventEnds);
+                calendar.createAllDayEvent(user + " " + event_suffix, eventStart, eventEnds);
 
                 // The counter is zeroed, so that it can be used again if necessary 
                 counter = 0;
@@ -138,12 +141,11 @@ function setHolidayCalendar() {
  * @param eventSuffix {String}
  */
 function deleteEvents(calendar, initialDate, finalDate, eventSuffix) {
-
     // Receive all of the events between the dates
     var eventsToDelete = calendar.getEvents(initialDate, finalDate, {
         search: eventSuffix
     });
-
+    var x = eventsToDelete;
     // Run through all the events to delete
     for (var i = 0; i < eventsToDelete.length; i++) {
 
@@ -151,4 +153,39 @@ function deleteEvents(calendar, initialDate, finalDate, eventSuffix) {
         eventsToDelete[i].deleteEvent();
     }
 }
+
+function runHolidayResponse(){
+  var planilhaFunc = SpreadsheetApp.openById(Settings.spreadsheetId);
+  var sheet = planilhaFunc.getSheetByName(Settings.requestSheetName);
+  var lastRow = sheet.getLastRow();
+  var dataRange = sheet.getDataRange();
+  
+  // Fetch values for each row in the Range.
+  var data = dataRange.getValues();
+  for (i=1; i<data.length; i++) {
+    var row = data[i];
+    var emailAddress = row[1]; // First column
+    // Verifiy if the status of request is different of "Waiting" and empty
+    // And if the status of e-mail is different of "Sent"
+    // If all of these conditions are true, the e-mail will be sent with the answer
+    if(row[0] != "" && row[5] != "Waiting" && row[5] != "" && row[6] != 'Sent'){
+      var email_answer = 'Your vacation request (from '+ formatDate(row[2]) + ' to ' + formatDate(row[3]) + ') was <b>'+ row[5] + '</b>';
+      if (row[5] == "Denied" && row[7] !== "") {
+        email_answer += ' because ' + row[7];
+      }
+      MailApp.sendEmail(emailAddress, "Day Off Request", "", {'htmlBody': email_answer});
+      var range = sheet.getRange(1 + i, 7);
+      range.setValue('Sent');
+      
+      // Set dates on Holiday Calendar
+      setHolidayCalendar();
+    }
+  }
+}
+
+function formatDate(date) {
+  var date = new Date(date);
+  return (date.getMonth() + 1) + '/' + (date.getDate() + 1) + '/' +  date.getFullYear();
+}
+
 
